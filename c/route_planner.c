@@ -9,6 +9,7 @@
 #define MAX_NODES 10000
 #define MAX_EDGES 50000
 #define EARTH_RADIUS 6371.0
+#define M_PI 3.14
 
 // Node structure
 typedef struct {

@@ -47,19 +47,21 @@ void* free_priority_node(PriorityNode*);
 PriorityQueue* create_priority_queue();
 void push_priority_queue(PriorityQueue*, void*, double);
 void* pull_priority_queue(PriorityQueue*);
+int priority_queue_is_empty(PriorityQueue*);
 void free_priority_queue(PriorityQueue*);
 
 /*
-	Data structures needed for the graph
+	Data structures needed for the graph operations
 */
 
 typedef struct {
-	void* vertex;
+	void* vertex; // always Vertex*
 	double weight;
 } Connection;
 
 typedef struct {
 	int id;
+	int index;
 
 	double lat;
 	double lon;
@@ -67,7 +69,7 @@ typedef struct {
 	int earliest;
 	int latest;	
 
-	LinkedList* connections;
+	LinkedList* connections; // contains Connection*
 } Vertex;
 
 typedef struct {
@@ -83,6 +85,11 @@ typedef struct {
 	int edge_count;
 	Edge* edges[MAX_EDGES];
 } Graph;
+
+typedef struct {
+	int nodes_visited;
+	LinkedList* vertices; // contains Vertex*
+} Path;
 
 /*
 	functions on the graph data structures
@@ -100,5 +107,11 @@ Edge* create_edge();
 void free_edge(Edge*);
 
 Connection* create_connection(Vertex*, double);
+// connections are freed in free_linked_list so no seperate free is required
 
-void dijkstra(Graph*, Vertex*, Vertex*, double*, int*, int*);
+Path* create_path(int);
+void push_path(Path*, Vertex*);
+void free_path(Path*);
+void print_path(Path*);
+
+Path* dijkstra(Graph*, Vertex*, Vertex*);

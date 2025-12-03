@@ -164,7 +164,7 @@ void push_priority_queue(PriorityQueue* queue, void* data, double priority) {
 /* pull_priority_queue
  - pulls the item with the lowest priority in the queue
  - takes a pointer to a priority queue
- - returns the data with the lowest priority or NULL on error
+ - returns the data with the lowest priority or NULL on error or empty
 */
 void* pull_priority_queue(PriorityQueue* queue) {
 	if (queue == NULL) { return NULL; }
@@ -177,6 +177,31 @@ void* pull_priority_queue(PriorityQueue* queue) {
 	free_priority_node(node);
 
 	return data;
+}
+
+/* priority_queue_is_empty
+ - returns if a priority queue is empty
+ - takes a pointer to a priority queue
+ - returns 1 if the priority queue is empty or NULL and 0 if it is not
+*/
+int priority_queue_is_empty(PriorityQueue* queue) {
+	if (queue == NULL) { return 1; }
+
+	return queue->first == NULL ? 1 : 0;
+}
+
+/* free_priority_queue
+ - frees a priority queue
+ - takes a pointer to a priority queue
+*/
+void free_priority_queue(PriorityQueue* queue){ 
+	if (queue == NULL) { return; }
+
+	while (queue->first != NULL) {
+		pull_priority_queue(queue);
+	}
+
+	free(queue);
 }
 
 /* create_graph
@@ -209,6 +234,7 @@ void add_vertex(Graph* graph, Vertex* vertex) {
 	if (graph == NULL) { return; }
 	if (vertex == NULL) { return; }
 
+	vertex->index = graph->vertex_count;
 	graph->vertices[graph->vertex_count] = vertex;
 	graph->vertex_count += 1;
 }
@@ -277,6 +303,7 @@ Vertex* create_vertex(int id, double lat, double lon, int earliest, int latest) 
 	if (vertex == NULL) { return NULL; }
 
 	vertex->id = id;
+	vertex->index = -1;
 	vertex->lat = lat;
 	vertex->lon = lon;
 	vertex->earliest = earliest;
@@ -337,18 +364,167 @@ Connection* create_connection(Vertex* vertex, double weight) {
 	return connection;
 }
 
-void dijkstra(Graph* graph, Vertex* start, Vertex* end, double** distances, int** previous, int* nodes_explored) {
-	PriorityQueue* queue = create_priority_queue();
+/* create_path
+ - allocates a new path structure
+ - returns a pointer to the new path structure or NULL on error
+*/
+Path* create_path(int nodes_visited) {
+	Path* path = malloc(sizeof(Path));
+	if (path == NULL) { return NULL; }
 
-	*distances = malloc(sizeof(double) * graph->vertex_count);
-	*previous = malloc(sizeof(int) * graph->vertex_count);
+	path->nodes_visited = nodes_visited;
+	path->vertices = create_linked_list();
+
+	return path;
+}
+
+/* push_path
+ - adds a vertex onto the path
+ - takes a path and the vertex to add to it
+*/
+void push_path(Path* path, Vertex* vertex) {
+	if (path == NULL) { return; }
+	if (vertex == NULL) { return; }
+
+	push_linked_list(path->vertices, vertex);
+}
+
+/* free_path
+ - frees a path structure
+ - takes a pointer to the path
+*/
+void free_path(Path* path) {
+	if (path == NULL) { return; }
+
+	free_linked_list(path->vertices, 0);
+	free(path);
+}
+
+/* print_path
+ - prints a path structure
+ - takes a pointer to the path
+*/
+void print_path(Path* path) {
+	if (path == NULL) { return; }
+	if (path->vertices == NULL) { return; }
+	if (path->vertices->last == NULL) { return; }
+
+	// line 1
+	printf("Path from %d to %d: ", ((Vertex*) path->vertices->last->data)->id, ((Vertex*) path->vertices->first->data)->id);
+
+	Node* current = path->vertices->last;
+	while(current != NULL) {
+		Vertex* vertex = current->data;
+		printf("%d", vertex->id);
+		if (current->prev != NULL) { printf(" -> "); }
+		current = current->prev;
+	}
+	printf("\n");
+
+	// line 2
+	double distance = 0;
+	current = path->vertices->last;
+	Node* next = path->vertices->last->prev;
+	while (next != NULL) {
+		Vertex* current_v = current->data;
+		Vertex* next_v = next->data;
+
+		Node* adjacent = current_v->connections->first;
+		while (adjacent != NULL) {
+			Connection* connection = adjacent->data;
+			if (connection->vertex == next_v) { 
+				distance += connection->weight; 
+				break; 
+			}
+			adjacent = adjacent->next;
+		}
+
+		current = next;
+		next = current->prev;
+	}
+	printf("Total distance: %lf km\n", distance);
+
+	// line 3
+	printf("Nodes explored: %d\n", path->nodes_visited);
+}
+
+/* dijkstra
+ - does dijkstra pathfinding without other constraints
+ - takes a graph, a start vertex, and an end vertex
+ - returns a path structure with the shortest path
+*/
+Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
+	PriorityQueue* queue = create_priority_queue(); // contains Vertex*
 	
+	double* distance = malloc(sizeof(double) * graph->vertex_count);
+	int* previous = malloc(sizeof(int) * graph->vertex_count);
+	int nodes_visited = 0;
+
+	for (int i = 0; i < graph->vertex_count; i++) {
+		distance[i] = -1;
+		previous[i] = -1;
+	}
+
+	distance[0] = 0;
+	previous[0] = 0;
+
+	push_priority_queue(queue, start, 0);
+
+	while (!priority_queue_is_empty(queue)) {
+		Vertex* current = pull_priority_queue(queue);
+		nodes_visited += 1;
+
+		if (current == end) { break; }
+
+		Node* connection = current->connections->first;
+		while (connection != NULL) {
+			Connection* data = connection->data;
+			int index = ((Vertex*) data->vertex)->index;
+
+			if (previous[index] != -1) { connection = connection->next; continue; }   
+
+			distance[index] = distance[current->index] + data->weight;
+			previous[index] = current->id;
+
+			push_priority_queue(queue, data->vertex, distance[index]);
+
+			connection = connection->next;
+		}
+	}
+
+	Path* path = create_path(nodes_visited);
+
+	Vertex* current = end;
+	while (current != start) {
+		push_path(path, current);
+
+		int index = current->index;
+
+		int previous_id = previous[index];
+		Vertex* previous = NULL;
+		for (int i = 0; i < graph->vertex_count; i++) {
+			if (graph->vertices[i]->id == previous_id) {
+				previous = graph->vertices[i];
+				break;
+			}
+		}
+
+		current = previous;
+	}
+
+	push_path(path, current);
+
+	free_priority_queue(queue);
+	free(distance);
+	free(previous);
+
+	return path;
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 6) {
         printf("Usage: %s <nodes.csv> <edges.csv> <start_node> <end_node> <algorithm>\n", argv[0]);
-        printf("Algorithms: dijkstra, astar, bellman-ford\n");
+        printf("Algorithms: dijkstra\n");
         return 1;
     }
 
@@ -415,5 +591,11 @@ int main(int argc, char* argv[]) {
 
 	if (start_vertex == NULL || end_vertex == NULL) { printf("Invalid start or end node\n"); return 1; }
 
+	Path* path = dijkstra(graph, start_vertex, end_vertex);
+
+	printf("=== Dijkstra's Algorithm ===\n");
+	print_path(path);
+
+	free_path(path);
 	free_graph(graph);
 }

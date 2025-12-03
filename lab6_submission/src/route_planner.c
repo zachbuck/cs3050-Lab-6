@@ -4,6 +4,11 @@
 
 #include "route_planner.h"
 
+/* create_node
+ - allocates a new node structure
+ - takes a void* data which is the data stored in the node
+ - returns a pointer to the node or NULL on error
+*/
 Node* create_node(void* data) {
 	Node* node = malloc(sizeof(Node));
 	if (node == NULL) { return NULL; }
@@ -15,6 +20,11 @@ Node* create_node(void* data) {
 	return node;
 }
 
+/* free_node
+ - frees a node structure
+ - takes a pointer to a node
+ - returns the contained data or NULL on error
+*/
 void* free_node(Node* node) {
 	if (node == NULL) { return NULL; }
 
@@ -24,6 +34,10 @@ void* free_node(Node* node) {
 	return data;
 }
 
+/* create_linked_list
+ - allocates a new linked list structure
+ - returns a pointer to the new linked list or NULL on error
+*/
 LinkedList* create_linked_list() {
 	LinkedList* list = malloc(sizeof(LinkedList));
 	if (list == NULL) { return NULL; }
@@ -34,6 +48,10 @@ LinkedList* create_linked_list() {
 	return list;
 }
 
+/* push_linked_list
+ - pushes an item to the end of the linked list
+ - takes a pointer to the linked list and a void* with the data to be stored
+*/
 void push_linked_list(LinkedList* list, void* data) {
 	if (list == NULL) { return; }
 
@@ -50,6 +68,11 @@ void push_linked_list(LinkedList* list, void* data) {
 	}
 }
 
+/* free_linked_list
+ - frees a linked list structure and optionally all of the data which was stored inside
+ - takes a pointer to the linked list
+ - takes an integer which makes the function free all contained data on != 0
+*/
 void free_linked_list(LinkedList* list, int free_data) {
 	if (list == NULL) { return; }
 
@@ -66,6 +89,11 @@ void free_linked_list(LinkedList* list, int free_data) {
 	free(list);
 }
 
+/* create_priority_node
+ - allocates a priority node structure
+ - takes a void* data for the data stored in the node and a double for the priority of the node
+ - returns a pointer to the node or NULL on error
+*/
 PriorityNode* create_priority_node(void* data, double priority) {
 	PriorityNode* node = malloc(sizeof(PriorityNode));
 	if (node == NULL) { return NULL; }
@@ -77,6 +105,11 @@ PriorityNode* create_priority_node(void* data, double priority) {
 	return node;
 }
 
+/* free_priority_node
+ - frees a priority node structure
+ - takes a priority node to be freed
+ - returns the data stored inside or NULL on error
+*/
 void* free_priority_node(PriorityNode* node) {
 	if (node == NULL) { return NULL; }
 
@@ -86,6 +119,10 @@ void* free_priority_node(PriorityNode* node) {
 	return data;
 }
 
+/* create_priority_queue
+ - allocates a new priority queue structure
+ - returns a pointer to the new priority queue or NULL on error
+*/
 PriorityQueue* create_priority_queue() {
 	PriorityQueue* queue = malloc(sizeof(PriorityQueue));
 	if (queue == NULL) { return NULL; }
@@ -95,6 +132,10 @@ PriorityQueue* create_priority_queue() {
 	return queue;
 }
 
+/* push_priority_queue
+ - pushes an item into the priority queue
+ - takes a pointer to a priority queue, a piece of data to be stored, and the priority of that piece of data in the queue
+*/
 void push_priority_queue(PriorityQueue* queue, void* data, double priority) {
 	if (queue == NULL) { return; }
 
@@ -120,6 +161,11 @@ void push_priority_queue(PriorityQueue* queue, void* data, double priority) {
 	}
 }
 
+/* pull_priority_queue
+ - pulls the item with the lowest priority in the queue
+ - takes a pointer to a priority queue
+ - returns the data with the lowest priority or NULL on error
+*/
 void* pull_priority_queue(PriorityQueue* queue) {
 	if (queue == NULL) { return NULL; }
 	if (queue->first == NULL) { return NULL; }
@@ -133,6 +179,10 @@ void* pull_priority_queue(PriorityQueue* queue) {
 	return data;
 }
 
+/* create_graph
+ - allocates a new graph structure
+ - returns a pointer to the new graph structure or NULL on error
+*/
 Graph* create_graph() {
 	Graph* graph = malloc(sizeof(Graph));
 	if (graph == NULL) { return NULL; }
@@ -151,6 +201,10 @@ Graph* create_graph() {
 	return graph;
 }
 
+/* add_vertex
+ - adds a vertex to a graph
+ - takes a graph and the vertex to be added to that graph
+*/
 void add_vertex(Graph* graph, Vertex* vertex) {
 	if (graph == NULL) { return; }
 	if (vertex == NULL) { return; }
@@ -159,6 +213,10 @@ void add_vertex(Graph* graph, Vertex* vertex) {
 	graph->vertex_count += 1;
 }
 
+/* add_edge
+ - adds an edge to a graph
+ - takes a graph and an edge to be added
+*/
 void add_edge(Graph* graph, Edge* edge) {
 	if (graph == NULL) { return; }
 	if (edge == NULL) { return; }
@@ -189,6 +247,10 @@ void add_edge(Graph* graph, Edge* edge) {
 	push_linked_list(to->connections, connection);
 }
 
+/* free_graph
+ - frees a graph structure
+ - takes the graph to be freed
+*/
 void free_graph(Graph* graph) {
 	if (graph == NULL) { return; }
 
@@ -203,6 +265,13 @@ void free_graph(Graph* graph) {
 	free(graph);
 }
 
+/* create_vertex
+ - allocates a new vertex structure
+ - takes an int for the id of the vertex
+ - takes two doubles for the latitude and longitude of the vertex
+ - takes two ints for the earliest and latest times that they are available (should be -1 if not using time based constraints)
+ - returns a pointer to the new vertex or NULL on error
+*/
 Vertex* create_vertex(int id, double lat, double lon, int earliest, int latest) {
 	Vertex* vertex = malloc(sizeof(Vertex));
 	if (vertex == NULL) { return NULL; }
@@ -217,11 +286,21 @@ Vertex* create_vertex(int id, double lat, double lon, int earliest, int latest) 
 	return vertex;
 }
 
+/* free_vertex
+ - frees a vertex structure
+ - takes a pointer to the vertex
+*/
 void free_vertex(Vertex* vertex) {
 	free_linked_list(vertex->connections, 1);
 	free(vertex);
 }
 
+/* create_edge
+ - allocates a new edge structure
+ - takes two ints for the id of the vertex it is from and to
+ - takes a double for the weight of the edge
+ - returns a pointer to the new edge or NULL on error
+*/
 Edge* create_edge(int from, int to, double weight) {
 	Edge* edge = malloc(sizeof(Edge));
 	if (edge == NULL) { return NULL; }
@@ -233,10 +312,19 @@ Edge* create_edge(int from, int to, double weight) {
 	return edge;
 }
 
+/* free_edge
+ - frees an edge structure
+ - takes a pointer to an edge structure
+*/
 void free_edge(Edge* edge) {
 	free(edge);
 }
 
+/* create_connection
+ - allocates a new connection structure
+ - takes a vertex destination and a double for the weight of the edge
+ - returns a pointer to the new connection object or NULL on error
+*/
 Connection* create_connection(Vertex* vertex, double weight) {
 	if (vertex == NULL) { return NULL; }
 

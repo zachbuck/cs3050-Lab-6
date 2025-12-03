@@ -88,6 +88,8 @@ typedef struct {
 
 typedef struct {
 	int nodes_visited;
+	double distance;
+	
 	LinkedList* vertices; // contains Vertex*
 } Path;
 
@@ -109,7 +111,7 @@ void free_edge(Edge*);
 Connection* create_connection(Vertex*, double);
 // connections are freed in free_linked_list so no seperate free is required
 
-Path* create_path(int);
+Path* create_path(int, double);
 void push_path(Path*, Vertex*);
 void free_path(Path*);
 void print_path(Path*);

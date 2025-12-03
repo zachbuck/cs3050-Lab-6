@@ -368,11 +368,13 @@ Connection* create_connection(Vertex* vertex, double weight) {
  - allocates a new path structure
  - returns a pointer to the new path structure or NULL on error
 */
-Path* create_path(int nodes_visited) {
+Path* create_path(int nodes_visited, double distance) {
 	Path* path = malloc(sizeof(Path));
 	if (path == NULL) { return NULL; }
 
 	path->nodes_visited = nodes_visited;
+	path->distance = distance;
+
 	path->vertices = create_linked_list();
 
 	return path;
@@ -422,27 +424,7 @@ void print_path(Path* path) {
 	printf("\n");
 
 	// line 2
-	double distance = 0;
-	current = path->vertices->last;
-	Node* next = path->vertices->last->prev;
-	while (next != NULL) {
-		Vertex* current_v = current->data;
-		Vertex* next_v = next->data;
-
-		Node* adjacent = current_v->connections->first;
-		while (adjacent != NULL) {
-			Connection* connection = adjacent->data;
-			if (connection->vertex == next_v) { 
-				distance += connection->weight; 
-				break; 
-			}
-			adjacent = adjacent->next;
-		}
-
-		current = next;
-		next = current->prev;
-	}
-	printf("Total distance: %lf km\n", distance);
+	printf("Total distance: %lf km\n", path->distance);
 
 	// line 3
 	printf("Nodes explored: %d\n", path->nodes_visited);
@@ -492,7 +474,7 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 		}
 	}
 
-	Path* path = create_path(nodes_visited);
+	Path* path = create_path(nodes_visited, distance[end->index]);
 
 	Vertex* current = end;
 	while (current != start) {

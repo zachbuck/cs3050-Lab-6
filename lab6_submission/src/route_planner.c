@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "route_planner.h"
 
@@ -398,7 +399,7 @@ void push_path(Path* path, Vertex* vertex) {
 void free_path(Path* path) {
 	if (path == NULL) { return; }
 
-	free_linked_list(path->vertices, 0);
+	free_linked_list(path->vertices, path_is_error(path));
 	free(path);
 }
 
@@ -408,6 +409,7 @@ void free_path(Path* path) {
 */
 void print_path(Path* path) {
 	if (path == NULL) { return; }
+	if (path_is_error(path)) { print_path_error(path); return; }
 	if (path->vertices == NULL) { return; }
 	if (path->vertices->last == NULL) { return; }
 
@@ -428,6 +430,27 @@ void print_path(Path* path) {
 
 	// line 3
 	printf("Nodes explored: %d\n", path->nodes_visited);
+}
+
+/* print_path_error
+ - prints an error message in an invalid path
+ - takes a pointer to the path
+*/
+void print_path_error(Path* path) {
+	Node* current = path->vertices->first;
+	while (current != NULL) {
+		printf("%s\n", ((char*) current->data));
+		current = current->next;
+	}
+}
+
+/* path_is_error
+ - returns if a path is an error from an invalid path or a valid path
+ - takes a pointer to the path
+ - returns 0 for a valid path and != 0 for any invalid path
+*/
+int path_is_error(Path* path) {
+	return path->distance == -1 && path->nodes_visited == -1;
 }
 
 /* dijkstra
@@ -472,6 +495,112 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 
 			connection = connection->next;
 		}
+	}
+
+	// on not finding a viable path
+	if (previous[end->index] == -1) { 
+		Path* path = create_path(-1, -1);
+		char error_message[] = "Could not find viable path";
+		char* heap_error = malloc(sizeof(error_message));
+		memcpy(heap_error, error_message, sizeof(error_message));
+		push_linked_list(path->vertices, heap_error);
+
+		free_priority_queue(queue);
+		free(distance);
+		free(previous);
+
+		return path;
+	}
+
+	Path* path = create_path(nodes_visited, distance[end->index]);
+
+	Vertex* current = end;
+	while (current != start) {
+		push_path(path, current);
+
+		int index = current->index;
+
+		int previous_id = previous[index];
+		Vertex* previous = NULL;
+		for (int i = 0; i < graph->vertex_count; i++) {
+			if (graph->vertices[i]->id == previous_id) {
+				previous = graph->vertices[i];
+				break;
+			}
+		}
+
+		current = previous;
+	}
+
+	push_path(path, current);
+
+	free_priority_queue(queue);
+	free(distance);
+	free(previous);
+
+	return path;
+}
+
+Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
+	PriorityQueue* queue = create_priority_queue(); // contains Vertex*
+	
+	double* distance = malloc(sizeof(double) * graph->vertex_count);
+	int* previous = malloc(sizeof(int) * graph->vertex_count);
+	int nodes_visited = 0;
+
+	for (int i = 0; i < graph->vertex_count; i++) {
+		distance[i] = -1;
+		previous[i] = -1;
+	}
+
+	distance[0] = 0;
+	previous[0] = 0;
+
+	push_priority_queue(queue, start, 0);
+
+	while (!priority_queue_is_empty(queue)) {
+		Vertex* current = pull_priority_queue(queue);
+		nodes_visited += 1;
+		double current_distance = distance[current->index];
+
+		if (current == end) { break; }
+
+		Node* connection = current->connections->first;
+		while (connection != NULL) {
+			Connection* data = connection->data;
+			int index = ((Vertex*) data->vertex)->index;
+
+			if (previous[index] != -1) { connection = connection->next; continue; }
+			if (current->latest + data->weight < ((Vertex*) data->vertex)->earliest) { connection = connection->next; continue; }
+			if (current_distance + data->weight > ((Vertex*) data->vertex)->latest) { connection = connection->next; continue; }
+
+			if (current_distance + data->weight > ((Vertex*) data->vertex)->earliest) {
+				distance[index] = current_distance + data->weight;
+				previous[index] = current->id;
+			} else {
+				distance[index] = ((Vertex*) data->vertex)->earliest;
+				previous[index] = current->id;
+			}
+
+			push_priority_queue(queue, data->vertex, distance[index]);
+
+			connection = connection->next;
+		}
+	}
+
+	// on not finding a viable path
+	if (previous[end->index] == -1) { 
+		Path* path = create_path(-1, -1);
+		char error_message[] = "Could not find viable path";
+		char* heap_error = malloc(sizeof(error_message));
+		memcpy(heap_error, error_message, sizeof(error_message));
+		push_linked_list(path->vertices, heap_error);
+
+		free_priority_queue(queue);
+		free(distance);
+		free(previous);
+
+		return path;
 	}
 
 	Path* path = create_path(nodes_visited, distance[end->index]);
@@ -573,7 +702,7 @@ int main(int argc, char* argv[]) {
 
 	if (start_vertex == NULL || end_vertex == NULL) { printf("Invalid start or end node\n"); return 1; }
 
-	Path* path = dijkstra(graph, start_vertex, end_vertex);
+	Path* path = time_constrained_dijkstra(graph, start_vertex, end_vertex);
 
 	printf("=== Dijkstra's Algorithm ===\n");
 	print_path(path);

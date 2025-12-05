@@ -89,8 +89,8 @@ typedef struct {
 typedef struct {
 	int nodes_visited;
 	double distance;
-	
-	LinkedList* vertices; // contains Vertex*
+
+	LinkedList* vertices; // contains Vertex* on success, contains char* on error
 } Path;
 
 /*
@@ -115,5 +115,7 @@ Path* create_path(int, double);
 void push_path(Path*, Vertex*);
 void free_path(Path*);
 void print_path(Path*);
+void print_path_error(Path*);
+int path_is_error(Path*);
 
 Path* dijkstra(Graph*, Vertex*, Vertex*);

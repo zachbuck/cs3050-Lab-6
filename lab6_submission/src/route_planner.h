@@ -123,3 +123,4 @@ Path* dijkstra(Graph*, Vertex*, Vertex*);
 Path* time_constrained_dijkstra(Graph*, Vertex*, Vertex*);
 
 Path* find_optimal_multi_route(Graph*, LinkedList*);
+Path* find_optimal_priority_multi_route(Graph*, LinkedList*, LinkedList*);

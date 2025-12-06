@@ -487,8 +487,7 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 		previous[i] = -1;
 	}
 
-	distance[0] = 0;
-	previous[0] = 0;
+	distance[start->index] = 0;
 
 	push_priority_queue(queue, start, 0);
 
@@ -570,8 +569,7 @@ Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 		previous[i] = -1;
 	}
 
-	distance[0] = 0;
-	previous[0] = 0;
+	distance[start->index] = 0;
 
 	push_priority_queue(queue, start, 0);
 
@@ -677,44 +675,31 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 		return path;
 	}
 
-	Path** potentials = malloc(sizeof(Path*) * id_count);
+	Path* best = NULL;
 	for (int i = 0; i < id_count; i++) {
-		potentials[i] = NULL;
-	}
-
-	for (int i = 0; i < id_count; i++) {
-		int* new_ids = malloc(sizeof(int) * id_count - 1);
+		int* other_ids = malloc(sizeof(int) * id_count - 1);
 		for (int j = 0; j < id_count; j++) {
-			if (i == j) { continue; }
+			if (j == i) { continue; }
 			int index = j < i ? j : j - 1;
-			new_ids[index] = ids[j];
+
+			other_ids[index] = ids[j];
 		}
 
-		potentials[i] = find_optimal_multi_route_recursion(graph, ids[i], new_ids, id_count - 1);
+		Path* current = find_optimal_multi_route_recursion(graph, ids[i], other_ids, id_count - 1);
+		if (best == NULL) { 
+			best = current; 
+		} else if (current->distance < best->distance) { 
+			free_path(best); 
+			best = current; 
+		} else {
+			free_path(current);
+		}
 
-		free(new_ids);
+		free(other_ids);
 	}
-
-	int best_index = -1;
-	for (int i = 0; i < id_count; i++) {
-		if (potentials[i] == NULL) { continue; }
-		if (best_index == -1) { best_index = i; continue; }
-		if (potentials[best_index]->distance > potentials[i]->distance) { best_index = i; continue; }
-	}
-
-	Path* best = potentials[best_index];
-
-	for (int i = 0; i < id_count; i++) {
-		if (potentials[i] == NULL) { continue; }
-		if (i == best_index) { continue; }
-		
-		free_path(potentials[i]);
-	}
-	
-	free(potentials);
 
 	Vertex* first = find_vertex_with_id(graph, start);
-	Vertex* end = find_vertex_with_id(graph, ids[best_index]);
+	Vertex* end = best->vertices->last->data;
 	double weight = 0;
 	Node* current = first->connections->first;
 	while (current != NULL) {
@@ -726,6 +711,8 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 
 		current = current->next;
 	}
+
+	//printf("%d -> %d -> %d (%lf + %lf)\n", first->id, end->id, ((Vertex*) best->vertices->first->data)->id, weight, best->distance);
 
 	best->distance += weight;
 	push_path(best, first);
@@ -765,6 +752,7 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 			Path* path = dijkstra(graph, start, end);
 			
 			Edge* edge = create_edge(internal->vertices[i]->id, internal->vertices[j]->id, path->distance);
+
 			add_edge(internal, edge);
 
 			free_path(path);
@@ -782,8 +770,15 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 		}
 
 		Path* current = find_optimal_multi_route_recursion(internal, internal->vertices[i]->id, other_vertices, internal->vertex_count - 1);
-		if (best == NULL) { best = current; }
-		if (current->distance < best->distance) { free_path(best); best = current; }
+		if (best == NULL) { 
+			best = current; 
+		}
+		else if (current->distance < best->distance) { 
+			free_path(best); 
+			best = current; 
+		} else {
+			free_path(current);
+		}
 
 		free(other_vertices);
 	}
@@ -802,20 +797,45 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 	return out;
 }
 
+// Path* find_optimal_priority_multi_route_recursion(int start, int* ids, int* priorities, int id_count) {
+// 	return NULL;
+// }
 
+// Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, LinkedList* priorities) {
+// 	return NULL;
+// }
 
 int main(int argc, char* argv[]) {
-    if (argc != 6) {
-        printf("Usage: %s <nodes.csv> <edges.csv> <start_node> <end_node> <algorithm>\n", argv[0]);
-        printf("Algorithms: dijkstra\n");
+    if (argc < 4) {
+        printf("Usage: %s <nodes.csv> <edges.csv> <algorithm> <additional arguments...>\n", argv[0]);
+        printf("Algorithms: dijkstra, time_contrained_dijkstra, multi_route, priority_multi_route\n");
         return 1;
-    }
+    } else {
+		char* algorithm = argv[3];
+		if (!strcmp(algorithm, "dijkstra") && argc != 6) {
+			printf("Usage: %s <node.csv> <edges.csv> dijkstra <start node> <end node>\n", argv[0]);
+        	return 1;
+		} else if (!strcmp(algorithm, "time_constrained_dijkstra") && argc != 6) {
+			printf("Usage: %s <node.csv> <edges.csv> time_constrained_dijkstra <start_node> <end_node>\n", argv[0]);
+        	return 1;
+		} else if (!strcmp(algorithm, "multi_route") && argc == 4) {
+			printf("Usage: %s <node.csv> <edges.csv> multi_route <node 1> <node 2> <node 3> ...\n", argv[0]);
+        	return 1;
+		} else if (!strcmp(algorithm, "priority_multi_route\n") && argc == 4) {
+			printf("Usage: %s <node.csv> <edges.csv> priority_multi_route <tolerance percent> <node 1>,<priority 1> <node 2>,<priority 2> <node 3>,<priority 3> ...\n", argv[0]);
+			printf("<tolerance percent> should be given in decimal format (i.e. 0.20)\n");
+			printf("<priority n> should be given as an integer where 1 is the highest priority followed by 2 etc.\n");
+        	return 1;
+		} else if (strcmp(algorithm, "dijkstra") && strcmp(algorithm, "time_constrained_dijkstra") && strcmp(algorithm, "multi_route") && strcmp(algorithm, "priority_multi_route\n")) {
+			printf("Usage: %s <nodes.csv> <edges.csv> <algorithm> <additional arguments...>\n", argv[0]);
+			printf("Algorithms: dijkstra, time_contrained_dijkstra, multi_route, priority_multi_route\n");
+			return 1;
+		}
+	}
 
 	char* vertices_file = argv[1];
 	char* edges_file = argv[2];
-	int start_node_index = atoi(argv[3]);
-	int end_node_index = atoi(argv[4]);
-	//char* algorithm = argv[5];
+	char* algorithm = argv[3];
 
 	Graph* graph = create_graph();
 
@@ -856,33 +876,56 @@ int main(int argc, char* argv[]) {
 	}
 	fclose(fp);
 
-	Vertex* start_vertex = NULL;
-	for (int i = 0; i < graph->vertex_count; i++) {
-		if (graph->vertices[i]->id == start_node_index) {
-			start_vertex = graph->vertices[i];
-			break;
+	if (!strcmp(algorithm, "dijkstra")) {
+		Vertex* start = find_vertex_with_id(graph, atoi(argv[4]));
+		Vertex* end = find_vertex_with_id(graph, atoi(argv[5]));
+
+		if (start == NULL || end == NULL) {
+			printf("Invalid start or end node\n");
+			free_graph(graph);
+			return 1;
 		}
+
+		Path* path = dijkstra(graph, start, end);
+
+		printf("=== Dijkstra ===\n");
+		print_path(path);
+		
+		free_path(path);
+	} else if (!strcmp(algorithm, "time_constrained_dijkstra")) {
+		Vertex* start = find_vertex_with_id(graph, atoi(argv[4]));
+		Vertex* end = find_vertex_with_id(graph, atoi(argv[5]));
+
+		if (start == NULL || end == NULL) {
+			printf("Invalid start or end node\n");
+			free_graph(graph);
+			return 1;
+		}
+
+		Path* path = time_constrained_dijkstra(graph, start, end);
+		
+		printf("=== Time Constrained Dijkstra ===\n");
+		print_path(path);
+
+		free_path(path);
+	} else if (!strcmp(algorithm, "multi_route")) {
+		LinkedList* vertices = create_linked_list();
+		for (int i = 4; i < argc; i++) {
+			Vertex* current = find_vertex_with_id(graph, atoi(argv[i]));
+			push_linked_list(vertices, current);
+		}
+
+		Path* path = find_optimal_multi_route(graph, vertices);
+
+		free_linked_list(vertices, 0);
+
+		printf("=== Multi Route ===\n");
+		print_path(path);
+
+		free_path(path);
+	} else if (!strcmp(algorithm, "priority_multi_route")) {
+
 	}
 
-	Vertex* end_vertex = NULL;
-	for (int i = 0; i < graph->vertex_count; i++) {
-		if (graph->vertices[i]->id == end_node_index) {
-			end_vertex = graph->vertices[i];
-			break;
-		}
-	}
-
-	if (start_vertex == NULL || end_vertex == NULL) { printf("Invalid start or end node\n"); return 1; }
-
-	LinkedList* vertices = create_linked_list();
-	push_linked_list(vertices, graph->vertices[0]);
-	push_linked_list(vertices, graph->vertices[1]);
-	push_linked_list(vertices, graph->vertices[2]);
-
-	Path* path = find_optimal_multi_route(graph, vertices);
-	print_path(path);
-
-	free_linked_list(vertices, 0);
-	free_path(path);
 	free_graph(graph);
 }

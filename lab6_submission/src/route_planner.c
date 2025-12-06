@@ -821,7 +821,7 @@ int main(int argc, char* argv[]) {
 		} else if (!strcmp(algorithm, "multi_route") && argc == 4) {
 			printf("Usage: %s <node.csv> <edges.csv> multi_route <node 1> <node 2> <node 3> ...\n", argv[0]);
         	return 1;
-		} else if (!strcmp(algorithm, "priority_multi_route\n") && argc == 4) {
+		} else if (!strcmp(algorithm, "priority_multi_route") && argc == 4) {
 			printf("Usage: %s <node.csv> <edges.csv> priority_multi_route <tolerance percent> <node 1>,<priority 1> <node 2>,<priority 2> <node 3>,<priority 3> ...\n", argv[0]);
 			printf("<tolerance percent> should be given in decimal format (i.e. 0.20)\n");
 			printf("<priority n> should be given as an integer where 1 is the highest priority followed by 2 etc.\n");

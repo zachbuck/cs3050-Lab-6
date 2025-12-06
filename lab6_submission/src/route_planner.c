@@ -292,6 +292,23 @@ void free_graph(Graph* graph) {
 	free(graph);
 }
 
+/* find_vertex_with_id
+ - finds a pointer to a vertex with a certain id
+ - takes a graph to search and an id to search for
+ - returns a pointer to the vertex or NULL on error
+*/
+Vertex* find_vertex_with_id(Graph* graph, int id) {
+	if (graph == NULL) { return NULL; }
+
+	for (int i = 0; i < graph->vertex_count; i++) {
+		if (graph->vertices[i]->id == id) {
+			return graph->vertices[i];
+		}
+	}
+
+	return NULL;
+}
+
 /* create_vertex
  - allocates a new vertex structure
  - takes an int for the id of the vertex
@@ -632,6 +649,161 @@ Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 	return path;
 }
 
+Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int id_count) {
+	if (graph == NULL) { return NULL; }
+	if (ids == NULL) { return NULL; }
+
+	if (id_count == 1) {
+		Vertex* first = find_vertex_with_id(graph, start);
+		Vertex* last = find_vertex_with_id(graph, *ids);
+
+		double weight = 0;
+		Node* current = first->connections->first;
+		while (current != NULL) {
+			Connection* connection = current->data;
+
+			if (connection->vertex == last) {
+				weight = connection->weight;
+				break;
+			}
+
+			current = current->next;
+		}
+
+		Path* path = create_path(0, weight);
+		push_path(path, last);
+		push_path(path, first);
+		
+		return path;
+	}
+
+	Path** potentials = malloc(sizeof(Path*) * id_count);
+	for (int i = 0; i < id_count; i++) {
+		potentials[i] = NULL;
+	}
+
+	for (int i = 0; i < id_count; i++) {
+		int* new_ids = malloc(sizeof(int) * id_count - 1);
+		for (int j = 0; j < id_count; j++) {
+			if (i == j) { continue; }
+			int index = j < i ? j : j - 1;
+			new_ids[index] = ids[j];
+		}
+
+		potentials[i] = find_optimal_multi_route_recursion(graph, ids[i], new_ids, id_count - 1);
+
+		free(new_ids);
+	}
+
+	int best_index = -1;
+	for (int i = 0; i < id_count; i++) {
+		if (potentials[i] == NULL) { continue; }
+		if (best_index == -1) { best_index = i; continue; }
+		if (potentials[best_index]->distance > potentials[i]->distance) { best_index = i; continue; }
+	}
+
+	Path* best = potentials[best_index];
+
+	for (int i = 0; i < id_count; i++) {
+		if (potentials[i] == NULL) { continue; }
+		if (i == best_index) { continue; }
+		
+		free_path(potentials[i]);
+	}
+	
+	free(potentials);
+
+	Vertex* first = find_vertex_with_id(graph, start);
+	Vertex* end = find_vertex_with_id(graph, ids[best_index]);
+	double weight = 0;
+	Node* current = first->connections->first;
+	while (current != NULL) {
+		Connection* connection = current->data;
+
+		if (connection->vertex == end) {
+			weight = connection->weight;
+		}
+
+		current = current->next;
+	}
+
+	best->distance += weight;
+	push_path(best, first);
+
+	return best;
+}
+
+Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
+	Graph* internal = create_graph();
+
+	Node* current = vertices->first;
+	while (current != NULL) {
+		Vertex* v = current->data;
+		Vertex* copy = create_vertex(v->id, v->lat, v->lon, v->earliest, v->latest);
+		add_vertex(internal, copy);
+		current = current->next;
+	}
+
+	for (int i = 0; i < internal->vertex_count; i++) {
+		for (int j = i + 1; j < internal->vertex_count; j++) {
+			Vertex* start = NULL;
+			for (int x = 0; x < graph->vertex_count; x++) {
+				if (graph->vertices[x]->id == internal->vertices[i]->id) {
+					start = graph->vertices[x];
+					break;
+				}
+			}
+
+			Vertex* end = NULL;
+			for (int x = 0; x < graph->vertex_count; x++) {
+				if (graph->vertices[x]->id == internal->vertices[j]->id) {
+					end = graph->vertices[x];
+					break;
+				}
+			}
+
+			Path* path = dijkstra(graph, start, end);
+			
+			Edge* edge = create_edge(internal->vertices[i]->id, internal->vertices[j]->id, path->distance);
+			add_edge(internal, edge);
+
+			free_path(path);
+		}
+	}
+
+	Path* best = NULL;
+	for (int i = 0; i < internal->vertex_count; i++) {
+		int* other_vertices = malloc(sizeof(int) * internal->vertex_count - 1);
+		for (int j = 0; j < internal->vertex_count; j++) {
+			if (j == i) { continue; }
+			int index = j < i ? j : j - 1;
+
+			other_vertices[index] = internal->vertices[j]->id;
+		}
+
+		Path* current = find_optimal_multi_route_recursion(internal, internal->vertices[i]->id, other_vertices, internal->vertex_count - 1);
+		if (best == NULL) { best = current; }
+		if (current->distance < best->distance) { free_path(best); best = current; }
+
+		free(other_vertices);
+	}
+
+	Path* out = create_path(0, best->distance);
+	Node* node = best->vertices->last;
+	while (node != NULL) {
+		Vertex* v = node->data;
+		push_path(out, find_vertex_with_id(graph, v->id));
+
+		node = node->prev;
+	}
+
+	free_path(best);
+	free_graph(internal);
+	return out;
+}
+
+
+
 int main(int argc, char* argv[]) {
     if (argc != 6) {
         printf("Usage: %s <nodes.csv> <edges.csv> <start_node> <end_node> <algorithm>\n", argv[0]);
@@ -702,11 +874,15 @@ int main(int argc, char* argv[]) {
 
 	if (start_vertex == NULL || end_vertex == NULL) { printf("Invalid start or end node\n"); return 1; }
 
-	Path* path = time_constrained_dijkstra(graph, start_vertex, end_vertex);
+	LinkedList* vertices = create_linked_list();
+	push_linked_list(vertices, graph->vertices[0]);
+	push_linked_list(vertices, graph->vertices[1]);
+	push_linked_list(vertices, graph->vertices[2]);
 
-	printf("=== Dijkstra's Algorithm ===\n");
+	Path* path = find_optimal_multi_route(graph, vertices);
 	print_path(path);
 
+	free_linked_list(vertices, 0);
 	free_path(path);
 	free_graph(graph);
 }

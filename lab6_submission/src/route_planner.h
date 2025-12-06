@@ -101,6 +101,7 @@ Graph* create_graph();
 void add_vertex(Graph*, Vertex*);
 void add_edge(Graph*, Edge*);
 void free_graph(Graph*);
+Vertex* find_vertex_with_id(Graph*, int);
 
 Vertex* create_vertex(int, double, double, int, int);
 void free_vertex(Vertex*);
@@ -119,3 +120,6 @@ void print_path_error(Path*);
 int path_is_error(Path*);
 
 Path* dijkstra(Graph*, Vertex*, Vertex*);
+Path* time_constrained_dijkstra(Graph*, Vertex*, Vertex*);
+
+Path* find_optimal_multi_route(Graph*, LinkedList*);

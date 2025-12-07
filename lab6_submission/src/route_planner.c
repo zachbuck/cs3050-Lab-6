@@ -712,8 +712,6 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 		current = current->next;
 	}
 
-	//printf("%d -> %d -> %d (%lf + %lf)\n", first->id, end->id, ((Vertex*) best->vertices->first->data)->id, weight, best->distance);
-
 	best->distance += weight;
 	push_path(best, first);
 
@@ -721,6 +719,9 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 }
 
 Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
+	if (graph == NULL) { return NULL; }
+	if (vertices == NULL) { return NULL; }
+
 	Graph* internal = create_graph();
 
 	Node* current = vertices->first;
@@ -772,8 +773,7 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 		Path* current = find_optimal_multi_route_recursion(internal, internal->vertices[i]->id, other_vertices, internal->vertex_count - 1);
 		if (best == NULL) { 
 			best = current; 
-		}
-		else if (current->distance < best->distance) { 
+		} else if (current->distance < best->distance) { 
 			free_path(best); 
 			best = current; 
 		} else {
@@ -797,13 +797,178 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 	return out;
 }
 
-// Path* find_optimal_priority_multi_route_recursion(int start, int* ids, int* priorities, int id_count) {
-// 	return NULL;
-// }
+Path* find_optimal_priority_multi_route_recursion(Graph* graph, int start, int* ids, int* priorities, int id_count) {
+	if (graph == NULL) { return NULL; }
+	if (ids == NULL) { return NULL; }
+	if (priorities == NULL) { return NULL; }
 
-// Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, LinkedList* priorities) {
-// 	return NULL;
-// }
+	if (id_count == 1) {
+		Vertex* first = find_vertex_with_id(graph, start);
+		Vertex* last = find_vertex_with_id(graph, *ids);
+
+		double weight = 0;
+		Node* current = first->connections->first;
+		while (current != NULL) {
+			Connection* connection = current->data;
+
+			if (connection->vertex == last) {
+				weight = connection->weight;
+				break;
+			}
+
+			current = current->next;
+		}
+
+		Path* path = create_path(0, weight);
+		push_path(path, last);
+		push_path(path, first);
+
+		return path;
+	}
+
+	int lowest_prio = -1;
+	for (int i = 0; i < id_count; i++) {
+		if (lowest_prio == -1) { lowest_prio = priorities[i]; }
+		else if (lowest_prio > priorities[i]) { lowest_prio = priorities[i]; }
+	}
+
+	Path* best = NULL;
+	for (int i = 0; i < id_count; i++) {
+		if (priorities[i] != lowest_prio) { continue; }
+
+		int* other_ids = malloc(sizeof(int) * id_count - 1);
+		int* other_prios = malloc(sizeof(int) * id_count - 1);
+		for (int j = 0; j < id_count; j++) {
+			if (j == i) { continue; }
+			int index = j < i ? j : j - 1;
+
+			other_ids[index] = ids[j];
+			other_prios[index] = priorities[j];
+		}
+
+		Path* current = find_optimal_priority_multi_route_recursion(graph, ids[i], other_ids, other_prios, id_count - 1);
+		if (best == NULL) {
+			best = current;
+		} else if (current->distance < best->distance) {
+			free_path(best);
+			best = current;
+		} else {
+			free_path(current);
+		}
+
+		free(other_ids);
+		free(other_prios);
+	}
+
+	Vertex* first = find_vertex_with_id(graph, start);
+	Vertex* end = best->vertices->last->data;
+	double weight = 0;
+	Node* current = first->connections->first;
+	while (current != NULL) {
+		Connection* connection = current->data;
+
+		if (connection->vertex == end) {
+			weight = connection->weight;
+		}
+
+		current = current->next;
+	}
+
+	best->distance += weight;
+	push_path(best, first);
+
+	return best;
+}
+
+Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, LinkedList* priority_list) {
+	if (graph == NULL) { return NULL; }
+	if (vertices == NULL) { return NULL; }
+	if (priority_list == NULL) { return NULL; }
+
+	Graph* internal = create_graph();
+
+	Node* current = vertices->first;
+	while (current != NULL) {
+		Vertex* v = current->data;
+		Vertex* copy = create_vertex(v->id, v->lat, v->lon, v->earliest, v->latest);
+		add_vertex(internal, copy);
+		current = current->next;
+	}
+
+	for (int i = 0; i < internal->vertex_count; i++) {
+		for (int j = i + 1; j < internal->vertex_count; j++) {
+			Vertex* start = find_vertex_with_id(graph, internal->vertices[i]->id);
+			Vertex* end = find_vertex_with_id(graph, internal->vertices[j]->id);
+
+			Path* path = dijkstra(graph, start, end);
+
+			Edge* edge = create_edge(internal->vertices[i]->id, internal->vertices[j]->id, path->distance);
+			add_edge(internal, edge);
+
+			free_path(path);
+		}
+	}
+
+	int* priorities = malloc(sizeof(int) * internal->vertex_count);
+	Node* prio = priority_list->first;
+	Node* v_node = vertices->first;
+	int i = 0;
+	while (prio != NULL) {
+		priorities[find_vertex_with_id(internal, ((Vertex*) v_node->data)->id)->index] = *((int*) prio->data);
+		i++;
+		prio = prio->next;
+		v_node = v_node->next;
+	}
+
+	int lowest_priority = -1;
+	for (int i = 0; i < internal->vertex_count; i++) {
+		if (lowest_priority == -1) { lowest_priority = priorities[i]; }
+		else if (lowest_priority > priorities[i]) { lowest_priority = priorities[i]; }
+	}
+
+	Path* best = NULL;
+	for (int i = 0; i < internal->vertex_count; i++) {
+		if (priorities[i] != lowest_priority) { continue; }
+
+		int* other_vertices = malloc(sizeof(int) * internal->vertex_count - 1);
+		int* other_priorities = malloc(sizeof(int) * internal->vertex_count - 1);
+		for (int j = 0; j < internal->vertex_count; j++) {
+			if (j == i) { continue; }
+			int index = j < i ? j : j - 1;
+
+			other_vertices[index] = internal->vertices[j]->id;
+			other_priorities[index] = priorities[j];
+		}
+
+		Path* current = find_optimal_priority_multi_route_recursion(internal, internal->vertices[i]->id, other_vertices, other_priorities, internal->vertex_count -1);
+		if (best == NULL) {
+			best = current;
+		} else if (current->distance < best->distance) {
+			free_path(best);
+			best = current;
+		} else {
+			free_path(current);
+		}
+
+		free(other_vertices);
+		free(other_priorities);
+	}
+
+	Path* out = create_path(0, best->distance);
+	Node* node = best->vertices->last;
+	while (node != NULL) {
+		Vertex* v = node->data;
+		push_path(out, find_vertex_with_id(graph, v->id));
+
+		node = node->prev;
+	}
+
+	free(priorities);
+	free_path(best);
+	free_graph(internal);
+
+	return out;
+}
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
@@ -824,9 +989,9 @@ int main(int argc, char* argv[]) {
 		} else if (!strcmp(algorithm, "priority_multi_route") && argc == 4) {
 			printf("Usage: %s <node.csv> <edges.csv> priority_multi_route <tolerance percent> <node 1>,<priority 1> <node 2>,<priority 2> <node 3>,<priority 3> ...\n", argv[0]);
 			printf("<tolerance percent> should be given in decimal format (i.e. 0.20)\n");
-			printf("<priority n> should be given as an integer where 1 is the highest priority followed by 2 etc.\n");
+			printf("<priority n> should be given as an integer where 1 is the lowest priority followed by 2 etc.\n");
         	return 1;
-		} else if (strcmp(algorithm, "dijkstra") && strcmp(algorithm, "time_constrained_dijkstra") && strcmp(algorithm, "multi_route") && strcmp(algorithm, "priority_multi_route\n")) {
+		} else if (strcmp(algorithm, "dijkstra") && strcmp(algorithm, "time_constrained_dijkstra") && strcmp(algorithm, "multi_route") && strcmp(algorithm, "priority_multi_route")) {
 			printf("Usage: %s <nodes.csv> <edges.csv> <algorithm> <additional arguments...>\n", argv[0]);
 			printf("Algorithms: dijkstra, time_contrained_dijkstra, multi_route, priority_multi_route\n");
 			return 1;
@@ -924,7 +1089,42 @@ int main(int argc, char* argv[]) {
 
 		free_path(path);
 	} else if (!strcmp(algorithm, "priority_multi_route")) {
+		LinkedList* vertices = create_linked_list();
+		LinkedList* priorities = create_linked_list();
+		for (int i = 5; i < argc; i++) {
+			int id, priority;
+			if (sscanf(argv[i], "%d,%d", &id, &priority) != 2) {
+				free_linked_list(vertices, 0);
+				free_linked_list(priorities, 1);
+				free_graph(graph);
+				return 1;
+			}
 
+			Vertex* vertex = find_vertex_with_id(graph, id);
+			push_linked_list(vertices, vertex);
+
+			int* prio = malloc(sizeof(int));
+			*prio = priority;
+			push_linked_list(priorities, prio);
+		}
+
+		Path* prio_route = find_optimal_priority_multi_route(graph, vertices, priorities);
+		Path* non_prio_route = find_optimal_multi_route(graph, vertices);
+
+		printf("=== Priority multi route ===\n");
+		printf("=== Path that follows priority ===\n");
+		print_path(prio_route);
+
+		if (non_prio_route->distance < (1 - atof(argv[4])) * prio_route->distance) {
+			printf("=== Faster route that breaks priority ===\n");
+			printf("=== Distance is %f%% as long ===\n", non_prio_route->distance / prio_route->distance * 100);
+			print_path(non_prio_route);
+		}
+
+		free_linked_list(vertices, 0);
+		free_linked_list(priorities, 1);
+		free_path(prio_route);
+		free_path(non_prio_route);
 	}
 
 	free_graph(graph);

@@ -557,6 +557,11 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 	return path;
 }
 
+/* time_constrained_dijkstra
+ - does dijkstra pathfinding taking into account the earliest and latest values of each of the vertices
+ - takes a graph, a start vertex, and an end vertex
+ - returns a path structure with the shortest path or an error path on error
+*/
 Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 	PriorityQueue* queue = create_priority_queue(); // contains Vertex*
 	
@@ -647,6 +652,11 @@ Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 	return path;
 }
 
+/* find_optimal_multi_route_recursion
+ - does a recursive search through a graph for the multiroute through it's vertices
+ - takes a fully saturated graph, a start id, an array of remaining ids, and the length of that array
+ - returns the shortest path through the remaining ids
+*/
 Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int id_count) {
 	if (graph == NULL) { return NULL; }
 	if (ids == NULL) { return NULL; }
@@ -718,6 +728,11 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 	return best;
 }
 
+/* find_optimal_multi_route
+ - searches through a graph for the fastest route containing a list of points
+ - takes a graph to search through and a linked list of vertices to route through
+ - returns the fastest path through those points
+*/
 Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 	if (graph == NULL) { return NULL; }
 	if (vertices == NULL) { return NULL; }
@@ -797,6 +812,11 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 	return out;
 }
 
+/* find_optimal_priority_multi_route_recursion
+ - does a recursive search through a graph for the multiroute through it's vertices, going to the most prioritized first
+ - takes a fully saturated graph, a start id, an array of remaining ids, an array of priorities for those ids, and the length of both of those arrays
+ - returns the shortest path that respects priority through the remaining ids
+*/
 Path* find_optimal_priority_multi_route_recursion(Graph* graph, int start, int* ids, int* priorities, int id_count) {
 	if (graph == NULL) { return NULL; }
 	if (ids == NULL) { return NULL; }
@@ -880,6 +900,11 @@ Path* find_optimal_priority_multi_route_recursion(Graph* graph, int start, int* 
 	return best;
 }
 
+/* find_optimal_priority_multi_route
+ - searches through a graph for the fastest route that respects priority through a list of vertices
+ - takes a graph to search through, a linked list of vertices, and a linked list of priorities for those vertices
+ - returns the fastest path that respects priority through those points
+*/
 Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, LinkedList* priority_list) {
 	if (graph == NULL) { return NULL; }
 	if (vertices == NULL) { return NULL; }

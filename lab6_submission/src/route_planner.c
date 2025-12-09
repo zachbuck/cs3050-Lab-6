@@ -336,6 +336,8 @@ Vertex* create_vertex(int id, double lat, double lon, int earliest, int latest) 
  - takes a pointer to the vertex
 */
 void free_vertex(Vertex* vertex) {
+	if (vertex == NULL) { return; }
+
 	free_linked_list(vertex->connections, 1);
 	free(vertex);
 }
@@ -362,6 +364,8 @@ Edge* create_edge(int from, int to, double weight) {
  - takes a pointer to an edge structure
 */
 void free_edge(Edge* edge) {
+	if (edge == NULL) { return; }
+
 	free(edge);
 }
 
@@ -492,16 +496,20 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 	push_priority_queue(queue, start, 0);
 
 	while (!priority_queue_is_empty(queue)) {
+		// pull the closest unvisited vertex
 		Vertex* current = pull_priority_queue(queue);
 		nodes_visited += 1;
 
+		// if the current vertex is the end goal, stop searching
 		if (current == end) { break; }
 
+		// search through all adjacent vertices
 		Node* connection = current->connections->first;
 		while (connection != NULL) {
 			Connection* data = connection->data;
 			int index = ((Vertex*) data->vertex)->index;
 
+			// since previous[index] is set to != -1 when it is found this basically just skips vertices that have already been identified
 			if (previous[index] != -1) { connection = connection->next; continue; }   
 
 			distance[index] = distance[current->index] + data->weight;
@@ -530,6 +538,7 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 
 	Path* path = create_path(nodes_visited, distance[end->index]);
 
+	// trace back the fastest route identified and push them into the path
 	Vertex* current = end;
 	while (current != start) {
 		push_path(path, current);
@@ -550,6 +559,7 @@ Path* dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 
 	push_path(path, current);
 
+	// free allocated temporary resources and return the identified path
 	free_priority_queue(queue);
 	free(distance);
 	free(previous);
@@ -578,6 +588,7 @@ Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 
 	push_priority_queue(queue, start, 0);
 
+	// This works largely identically to my basic dijkstra so I will comment differences
 	while (!priority_queue_is_empty(queue)) {
 		Vertex* current = pull_priority_queue(queue);
 		nodes_visited += 1;
@@ -591,9 +602,12 @@ Path* time_constrained_dijkstra(Graph* graph, Vertex* start, Vertex* end) {
 			int index = ((Vertex*) data->vertex)->index;
 
 			if (previous[index] != -1) { connection = connection->next; continue; }
+			
+			// ignore connections that cannot be accessed since the earliest and latest windows don't match up
 			if (current->latest + data->weight < ((Vertex*) data->vertex)->earliest) { connection = connection->next; continue; }
 			if (current_distance + data->weight > ((Vertex*) data->vertex)->latest) { connection = connection->next; continue; }
 
+			// wait if necessary for the vertex to become available
 			if (current_distance + data->weight > ((Vertex*) data->vertex)->earliest) {
 				distance[index] = current_distance + data->weight;
 				previous[index] = current->id;
@@ -661,10 +675,13 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 	if (graph == NULL) { return NULL; }
 	if (ids == NULL) { return NULL; }
 
+	// if the recursion is complete and there is only one path availabe, return that path
 	if (id_count == 1) {
 		Vertex* first = find_vertex_with_id(graph, start);
 		Vertex* last = find_vertex_with_id(graph, *ids);
 
+		// find the connection to the remaining vertex
+		// this is guaranteed to exist since Graph* graph, must be a fully connected graph
 		double weight = 0;
 		Node* current = first->connections->first;
 		while (current != NULL) {
@@ -678,6 +695,7 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 			current = current->next;
 		}
 
+		// create and return the one and only one path that can exist at this state of the recursion
 		Path* path = create_path(0, weight);
 		push_path(path, last);
 		push_path(path, first);
@@ -685,8 +703,10 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 		return path;
 	}
 
+	// search through the space of all current steps that can be taken and keep the one that results in the best path
 	Path* best = NULL;
 	for (int i = 0; i < id_count; i++) {
+		// populate the array 'other_ids'
 		int* other_ids = malloc(sizeof(int) * id_count - 1);
 		for (int j = 0; j < id_count; j++) {
 			if (j == i) { continue; }
@@ -695,6 +715,7 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 			other_ids[index] = ids[j];
 		}
 
+		// find the best route through all of the remaining ids and either replace best or free the path
 		Path* current = find_optimal_multi_route_recursion(graph, ids[i], other_ids, id_count - 1);
 		if (best == NULL) { 
 			best = current; 
@@ -708,6 +729,7 @@ Path* find_optimal_multi_route_recursion(Graph* graph, int start, int* ids, int 
 		free(other_ids);
 	}
 
+	//add the remaining connection information into the path and return it
 	Vertex* first = find_vertex_with_id(graph, start);
 	Vertex* end = best->vertices->last->data;
 	double weight = 0;
@@ -737,8 +759,12 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 	if (graph == NULL) { return NULL; }
 	if (vertices == NULL) { return NULL; }
 
+	// this is a second graph used internally in this function
+	// it contains only those vertices that are being pathed between and is fully connected 
+	// with edges weighted to the fastest route between those vertices on the original graph
 	Graph* internal = create_graph();
 
+	// copy all needed vertices into the graph
 	Node* current = vertices->first;
 	while (current != NULL) {
 		Vertex* v = current->data;
@@ -747,6 +773,7 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 		current = current->next;
 	}
 
+	// create all of the needed edges in the graph
 	for (int i = 0; i < internal->vertex_count; i++) {
 		for (int j = i + 1; j < internal->vertex_count; j++) {
 			Vertex* start = NULL;
@@ -775,6 +802,8 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 		}
 	}
 
+	// iterate through all vertices one could start with and use the recursive method to find the best route starting at each one
+	// this works in the same way as the recursive version
 	Path* best = NULL;
 	for (int i = 0; i < internal->vertex_count; i++) {
 		int* other_vertices = malloc(sizeof(int) * internal->vertex_count - 1);
@@ -798,14 +827,31 @@ Path* find_optimal_multi_route(Graph* graph, LinkedList* vertices) {
 		free(other_vertices);
 	}
 
+	// create a new path with the vertices from the original graph
 	Path* out = create_path(0, best->distance);
 	Node* node = best->vertices->last;
-	while (node != NULL) {
-		Vertex* v = node->data;
-		push_path(out, find_vertex_with_id(graph, v->id));
+	Node* next = best->vertices->last->prev;
+	while (next != NULL) {
+		Vertex* v1 = node->data;
+		Vertex* v2 = next->data;
 
-		node = node->prev;
+		Vertex* v3 = find_vertex_with_id(graph, v1->id);
+		Vertex* v4 = find_vertex_with_id(graph, v2->id);
+
+		Path* path = dijkstra(graph, v3, v4);
+		Node* current = path->vertices->last;
+		while (current->prev != NULL) {
+			Vertex* vertex = current->data;
+			push_path(out, vertex);
+			current = current->prev;
+		}
+
+		free_path(path);
+
+		node = next;
+		next = next->prev;
 	}
+	push_path(out, find_vertex_with_id(graph, ((Vertex*) node->data)->id));
 
 	free_path(best);
 	free_graph(internal);
@@ -822,6 +868,7 @@ Path* find_optimal_priority_multi_route_recursion(Graph* graph, int start, int* 
 	if (ids == NULL) { return NULL; }
 	if (priorities == NULL) { return NULL; }
 
+	// this all works essentially identically to the non-priority version so i will comment where differences occur
 	if (id_count == 1) {
 		Vertex* first = find_vertex_with_id(graph, start);
 		Vertex* last = find_vertex_with_id(graph, *ids);
@@ -846,14 +893,17 @@ Path* find_optimal_priority_multi_route_recursion(Graph* graph, int start, int* 
 		return path;
 	}
 
+	// find the vertex with the lowest priority
 	int lowest_prio = -1;
 	for (int i = 0; i < id_count; i++) {
 		if (lowest_prio == -1) { lowest_prio = priorities[i]; }
 		else if (lowest_prio > priorities[i]) { lowest_prio = priorities[i]; }
 	}
 
+	
 	Path* best = NULL;
 	for (int i = 0; i < id_count; i++) {
+		// skip next nodes which do not have the lowest priority
 		if (priorities[i] != lowest_prio) { continue; }
 
 		int* other_ids = malloc(sizeof(int) * id_count - 1);
@@ -910,6 +960,7 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 	if (vertices == NULL) { return NULL; }
 	if (priority_list == NULL) { return NULL; }
 
+	// again this is almost exactly identical to the non-priority version so I will comment where differences exist 
 	Graph* internal = create_graph();
 
 	Node* current = vertices->first;
@@ -934,6 +985,7 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 		}
 	}
 
+	// create an array to store the priorities
 	int* priorities = malloc(sizeof(int) * internal->vertex_count);
 	Node* prio = priority_list->first;
 	Node* v_node = vertices->first;
@@ -945,6 +997,7 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 		v_node = v_node->next;
 	}
 
+	// find the lowest priority
 	int lowest_priority = -1;
 	for (int i = 0; i < internal->vertex_count; i++) {
 		if (lowest_priority == -1) { lowest_priority = priorities[i]; }
@@ -953,6 +1006,7 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 
 	Path* best = NULL;
 	for (int i = 0; i < internal->vertex_count; i++) {
+		// skip vertices without the lowest priority
 		if (priorities[i] != lowest_priority) { continue; }
 
 		int* other_vertices = malloc(sizeof(int) * internal->vertex_count - 1);
@@ -981,12 +1035,28 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 
 	Path* out = create_path(0, best->distance);
 	Node* node = best->vertices->last;
-	while (node != NULL) {
-		Vertex* v = node->data;
-		push_path(out, find_vertex_with_id(graph, v->id));
+	Node* next = best->vertices->last->prev;
+	while (next != NULL) {
+		Vertex* v1 = node->data;
+		Vertex* v2 = next->data;
 
-		node = node->prev;
+		Vertex* v3 = find_vertex_with_id(graph, v1->id);
+		Vertex* v4 = find_vertex_with_id(graph, v2->id);
+
+		Path* path = dijkstra(graph, v3, v4);
+		Node* current = path->vertices->last;
+		while (current->prev != NULL) {
+			Vertex* vertex = current->data;
+			push_path(out, vertex);
+			current = current->prev;
+		}
+
+		free_path(path);
+
+		node = next;
+		next = next->prev;
 	}
+	push_path(out, find_vertex_with_id(graph, ((Vertex*) node->data)->id));
 
 	free(priorities);
 	free_path(best);
@@ -996,6 +1066,7 @@ Path* find_optimal_priority_multi_route(Graph* graph, LinkedList* vertices, Link
 }
 
 int main(int argc, char* argv[]) {
+	// print various descriptions of the usages of the program
     if (argc < 4) {
         printf("Usage: %s <nodes.csv> <edges.csv> <algorithm> <additional arguments...>\n", argv[0]);
         printf("Algorithms: dijkstra, time_contrained_dijkstra, multi_route, priority_multi_route\n");
@@ -1027,6 +1098,7 @@ int main(int argc, char* argv[]) {
 	char* edges_file = argv[2];
 	char* algorithm = argv[3];
 
+	// read the graph from the supplied files
 	Graph* graph = create_graph();
 
 	char line[256];
